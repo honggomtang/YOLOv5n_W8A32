@@ -1,3 +1,4 @@
+
 # YOLOv5n `.pt` → C Header (`weights.h`) Exporter
 
 전기전자공학부/임베디드(특히 MicroBlaze V / Vitis) 환경에서 쓰기 쉽도록,
@@ -70,3 +71,6 @@ python export_yolov5_weights_to_h.py --pt yolov5n.pt --out weights_bias_only.h -
   - 큰 배열을 flash/외부 메모리로 배치
   같은 방향으로 확장하면 됩니다.
 
+
+# YOLOv5n_in_C
+>>>>>>> 83d1ace09113e5e7e9316a7fc2940ce041cca3da
