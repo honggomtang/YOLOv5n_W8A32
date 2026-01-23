@@ -1,110 +1,285 @@
+# YOLOv5n 순수 C 포팅 프로젝트
 
-# YOLOv5n `.pt` → C Header + C 레퍼런스(Conv0) 검증
+전기전자공학부/임베디드(특히 MicroBlaze V / Vitis) 환경에서 실행 가능하도록,
+PyTorch YOLOv5n 모델을 **순수 C 언어**로 포팅한 프로젝트입니다.
 
-전기전자공학부/임베디드(특히 MicroBlaze V / Vitis) 환경에서 쓰기 쉽도록,
-PyTorch 모델 파일(`yolov5n.pt`)의 **가중치(Weights) / 편향(Bias)** 등을 뽑아서
-`weights.h` 형태의 C 헤더로 내보내는 도구입니다.
+## 현재 상태
 
-## 1) 폴더 구조(이렇게 씀)
+✅ **전체 파이프라인 구현 완료**
+- Layer 0~23: 특징 추출 파이프라인 (모든 레이어 Python과 동일, diff < 1e-4)
+- Layer 24: Detect Head (cv2, cv3 브랜치 구현 완료)
+- Decode: DFL 기반 디코딩 구현 완료
+- **.bin 파일 지원 완료**: 모든 테스트가 .bin 파일 사용 (헤더 파일 불필요)
+  - `weights.bin`: 가중치 바이너리 (10MB)
+  - `preprocessed_image.bin`: 전처리된 이미지 바이너리 (4.7MB)
+  - 개발/테스트 및 임베디드 환경 모두 .bin 파일 사용
 
-- **`assets/`**: 모델/가중치 같은 큰 파일
-- **`tools/`**: 파이썬 유틸
-- **`cinclude/`**: C 헤더
-- **`csrc/`**: C 소스
-- **`tests/`**: 테스트 벡터/테스트 실행파일
+## 폴더 구조
 
-- `assets/yolov5n.pt` 준비
-- Python 3 설치 (macOS 기본 `python3` 권장)
+```
+yolov5n/
+├── assets/              # 모델 파일 및 가중치
+│   ├── yolov5n.pt      # PyTorch 모델 파일
+│   └── weights.bin      # 바이너리 가중치 (10MB, 모든 환경에서 사용)
+├── data/
+│   ├── image/           # 입력 이미지
+│   └── input/
+│       └── preprocessed_image.bin  # 전처리된 이미지 바이너리 (4.7MB, 모든 환경에서 사용)
+├── tools/               # Python 유틸리티
+│   ├── export_weights_to_bin.py      # .pt → weights.bin 변환 (권장)
+│   ├── preprocess_image_to_bin.py    # 이미지 → .bin 변환 (권장)
+│   ├── gen_*_test_vectors.py         # 테스트 벡터 생성기
+│   └── ...
+├── csrc/                # C 소스 코드
+│   ├── operations/      # 기본 연산 (Conv2D, BN+SiLU, Concat, Upsample 등)
+│   ├── blocks/          # 복합 블록 (Conv, C3, SPPF, Detect, Decode)
+│   └── utils/           # 유틸리티 (weights_loader, image_loader)
+├── tests/               # 테스트 코드 및 테스트 벡터
+│   ├── test_*.c         # 단위 테스트
+│   └── test_vectors_*.h # Python에서 생성한 참조 데이터
+└── Makefile            # 빌드 자동화
+```
 
-## 2) 파이썬 환경 설치(처음 1회)
+## 구현된 블록 및 연산
 
-가장 무난한 방법은 가상환경(venv)입니다.
+### Operations (기본 연산)
+- **Conv2D**: 2D Convolution (NCHW)
+- **BN+SiLU**: Batch Normalization + SiLU Activation (fused)
+- **Bottleneck**: 1x1 Conv → 3x3 Conv + Residual
+- **Concat**: Channel-wise concatenation (2개/4개 지원)
+- **MaxPool2D**: 2D Max Pooling
+- **Upsample**: Nearest neighbor ×2 upsampling
+
+### Blocks (복합 블록)
+- **Conv**: Conv2D + BN + SiLU
+- **C3**: Cross-stage partial bottleneck (다중 Bottleneck 지원)
+- **SPPF**: Spatial Pyramid Pooling Fast
+- **Detect**: Detect Head (cv2: bbox prediction, cv3: class prediction)
+- **Decode**: DFL 기반 디코딩 (bbox + confidence + class)
+
+## 빠른 시작
+
+### 1. 환경 설정
 
 ```bash
 cd /Users/kinghong/Desktop/yolov5n
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install torch numpy
+python -m pip install torch numpy pillow ultralytics
 ```
 
-> 참고: `torch` 설치가 오래 걸릴 수 있어요. (CPU 버전)
+### 2. 가중치 및 이미지 .bin 파일 생성
 
-## 3) `weights.h` 생성
-
-### A. 전체 텐서(state_dict 전부) 내보내기
+#### 가중치 .bin 파일 생성
 
 ```bash
-cd /Users/kinghong/Desktop/yolov5n
 source .venv/bin/activate
-python tools/export_yolov5_weights_to_h.py --pt assets/yolov5n.pt --out assets/weights.h
+python tools/export_weights_to_bin.py \
+    --pt assets/yolov5n.pt \
+    --out assets/weights.bin \
+    --trust-pickle
 ```
 
-### B. weight만(또는 bias만) 뽑고 싶을 때 (추천)
-
-`weights.h`가 너무 커질 수 있어서, 처음에는 필요한 것만 뽑는 걸 추천합니다.
-
-- weight만:
+#### 이미지 .bin 파일 생성
 
 ```bash
-python tools/export_yolov5_weights_to_h.py --pt assets/yolov5n.pt --out assets/weights_weight_only.h --only ".weight"
-```
-
-- bias만:
-
-```bash
-python tools/export_yolov5_weights_to_h.py --pt assets/yolov5n.pt --out assets/weights_bias_only.h --only ".bias"
-```
-
-## 3.5) Conv2D부터 검증(추천 루트)
-
-YOLOv5n 첫 블록은 `Conv2d + BN + SiLU`야.
-
-- conv0: `Conv2d(3 -> 16, k=6, s=2, p=2, bias=False)`
-- bn0: `BatchNorm2d(16, eps=1e-3)`
-- act0: `SiLU`
-
-### A. 파이썬에서 테스트 벡터 뽑기
-
-```bash
-cd /Users/kinghong/Desktop/yolov5n
 source .venv/bin/activate
-python tools/gen_conv0_test_vectors.py --pt assets/yolov5n.pt --out tests/test_vectors_conv0.h --h 64 --w 64
+python tools/preprocess_image_to_bin.py \
+    --img data/image/zidane.jpg \
+    --out data/input/preprocessed_image.bin \
+    --size 640
 ```
 
-### B. C 레퍼런스 구현으로 비교하기(PC에서 먼저)
+> **참고**: 
+> - PyTorch 2.6+에서는 `--trust-pickle` 플래그가 필요할 수 있습니다.
+> - `.bin` 파일은 컴파일 시간 단축 및 메모리 효율성 향상에 유리합니다.
+> - 개발/테스트 및 임베디드 환경 모두 `.bin` 파일을 사용합니다.
 
-`test_conv0.c`는 `weights.h`(모델 파라미터) + `test_vectors_conv0.h`(입력/정답)로
-conv0를 돌리고 `max_abs_diff`를 출력해.
+### 3. 단위 테스트 실행
 
-예시(맥/리눅스):
-
+#### Conv Block 테스트
 ```bash
-cc -O2 -std=c11 csrc/test_conv0.c csrc/conv2d_ref.c csrc/bn_silu_ref.c -Icinclude -Iassets -Itests -lm -o tests/test_conv0
-./tests/test_conv0
+make test_conv0
 ```
 
-여기서 `OK` 뜨면, 그 다음부터 MicroBlaze로 포팅하면 돼.
+#### C3 Block 테스트
+```bash
+make test_c3
+```
 
-## 4) 출력 형식(헤더 안에 뭐가 들어가나)
+#### SPPF Block 테스트
+```bash
+make test_sppf_gen  # 테스트 벡터 생성
+make test_sppf      # 테스트 실행
+```
 
-각 파라미터 키(예: `model.0.conv.weight`)는 C 식별자로 변환되어:
+#### Upsample 테스트
+```bash
+make test_upsample_gen
+make test_upsample
+```
 
-- `static const float model_0_conv_weight[...] = { ... };`
-- `#define MODEL_0_CONV_WEIGHT_ELEMS (...)`
-- `#define MODEL_0_CONV_WEIGHT_DIM0 (...)` 같은 shape 매크로
+### 4. 전체 파이프라인 검증
 
-로 출력됩니다.
+#### Layer 0~9 검증 (이미지 입력)
+```bash
+make test_layer0_9_gen  # zidane.jpg 사용 (64x64로 리사이즈)
+make test_layer0_9
+```
 
-## 5) MicroBlaze/Vitis에서 쓰는 팁
+#### Layer 0~23 검증 (랜덤 입력)
+```bash
+make test_layer0_23_gen  # 32x32 랜덤 이미지
+make test_layer0_23
+```
 
-- `weights.h`를 Vitis 프로젝트 소스에 추가하고 `#include "weights.h"` 하면 됩니다.
-- 이 스크립트는 **float32로 강제 변환**해서 내보냅니다. (임베디드에서 다루기 단순)
-- 나중에 속도/메모리 최적화가 필요하면:
-  - INT8 양자화(quantization)
-  - 레이어별로 필요한 weight만 선택 추출
-  - 큰 배열을 flash/외부 메모리로 배치
-  같은 방향으로 확장하면 됩니다.
+**예상 출력:**
+```
+Layer 0 diff = 5.72205e-06 OK
+Layer 1 diff = 1.90735e-05 OK
+...
+Layer 23 diff = 0 OK
+
+All layers OK
+```
+
+## 상세 가이드
+
+### .bin 파일 형식
+
+가중치와 이미지는 바이너리 형식으로 저장됩니다:
+
+- **weights.bin**: 텐서 개수 + 각 텐서(이름, shape, 데이터)
+- **preprocessed_image.bin**: 원본 크기, 스케일, 패딩 정보 + 이미지 데이터
+
+C 코드에서는 `weights_loader`와 `image_loader` 유틸리티를 사용하여 로드합니다.
+
+### 레이어 구조
+
+YOLOv5n은 다음과 같은 레이어 구조를 가집니다:
+
+- **Layer 0~9**: Backbone (특징 추출)
+  - Conv, C3, SPPF 블록들
+- **Layer 10~17**: Neck (FPN/PAN 구조)
+  - Upsample, Concat, C3 블록들
+- **Layer 18~23**: Head (Detection 준비)
+  - Conv, Concat, C3 블록들
+- **Layer 24**: Detect (미구현)
+
+### Concat 참조 관계
+
+- **Layer 12**: Concat([Layer 11, Layer 6])
+- **Layer 16**: Concat([Layer 15, Layer 4])
+- **Layer 19**: Concat([Layer 18, Layer 14])
+- **Layer 22**: Concat([Layer 21, Layer 10])
+
+## MicroBlaze/Vitis 통합
+
+### .bin 파일 사용 (임베디드용, **권장**)
+
+임베디드 환경에서는 파일 시스템 없이 **메모리 직접 접근** 방식으로 가중치와 이미지를 사용합니다.
+
+#### 1. Linker Script 설정
+
+Vivado/Vitis에서 DDR3 메모리의 특정 영역을 예약:
+
+```
+MEMORY
+{
+  ...
+  WEIGHTS_MEM : ORIGIN = 0x81000000, LENGTH = 0x02400000  /* 36MB 가중치 */
+  IMAGE_MEM   : ORIGIN = 0x83400000, LENGTH = 0x01400000  /* 20MB 이미지 */
+  ...
+}
+```
+
+#### 2. XSCT로 메모리 로드
+
+보드 시작 시 XSCT로 .bin 파일을 메모리에 직접 로드:
+
+```tcl
+# XSCT 스크립트 예시
+connect
+targets -set -filter {name =~ "*MicroBlaze*"}
+dow assets/weights.bin 0x81000000
+dow data/input/preprocessed_image.bin 0x83400000
+```
+
+#### 3. C 코드에서 사용
+
+```c
+#include "csrc/utils/weights_loader.h"
+#include "csrc/utils/image_loader.h"
+
+#define WEIGHTS_BASE_ADDR  0x81000000
+#define IMAGE_BASE_ADDR    0x83400000
+
+int main(void) {
+    weights_loader_t weights;
+    preprocessed_image_t img;
+    
+    // 메모리 직접 접근 (파일 시스템 없음)
+    weights_init_from_memory(WEIGHTS_BASE_ADDR, &weights);
+    image_init_from_memory(IMAGE_BASE_ADDR, &img);
+    
+    // 가중치 사용
+    const tensor_info_t* conv0_w = weights_find_tensor(&weights, "model.0.conv.weight");
+    // ...
+    
+    weights_free(&weights);
+    image_free(&img);
+    return 0;
+}
+```
+
+### 개발/테스트 환경에서 사용
+
+```c
+#include "csrc/utils/weights_loader.h"
+#include "csrc/utils/image_loader.h"
+
+weights_loader_t weights;
+preprocessed_image_t img;
+
+// 파일 시스템에서 로드
+weights_load_from_file("assets/weights.bin", &weights);
+image_load_from_bin("data/input/preprocessed_image.bin", &img);
+
+// 가중치 사용
+const float* conv0_w = weights_get_tensor_data(&weights, "model.0.conv.weight");
+// ...
+
+weights_free(&weights);
+image_free(&img);
+```
+
+### .bin 파일의 장점
+
+1. **컴파일 시간 단축**: 헤더 파일(36MB+20MB)을 컴파일에 포함하지 않음
+2. **메모리 효율**: 런타임에 필요한 데이터만 메모리에 로드
+3. **파일 시스템 불필요**: 임베디드 환경에서 파일 시스템 오버헤드 없음
+4. **빠른 접근**: 메모리 직접 접근으로 최고 속도
+
+### 최적화 팁
+
+- **메모리**: 큰 배열(가중치, 중간 버퍼)을 외부 메모리/Flash에 배치
+- **속도**: INT8 양자화, 레이어별 선택적 추출
+- **정확도**: Float32 기본 사용 (필요시 Float16 고려)
 
 
+## 다음 단계
 
+- [x] Layer 0~23 구현 및 검증
+- [x] Layer 24 (Detect Head) 구현 및 검증
+- [x] Decode 블록 구현 및 검증
+- [x] .bin 파일 지원 완료 (모든 테스트가 .bin 파일 사용)
+- [x] weights_loader, image_loader 유틸리티 구현
+- [ ] NMS (Non-Maximum Suppression) 구현
+- [ ] 전체 파이프라인 통합 테스트 (main.c)
+- [ ] MicroBlaze V 하드웨어 검증
+
+## 라이선스
+
+이 프로젝트는 YOLOv5n 모델을 C로 포팅한 구현체입니다.
+원본 YOLOv5는 Ultralytics의 라이선스를 따릅니다.

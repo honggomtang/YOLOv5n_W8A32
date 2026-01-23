@@ -1,9 +1,8 @@
 #include <stdio.h>
 #include <math.h>
 
-#include "../assets/weights.h"
 #include "test_vectors_c3.h"
-
+#include "../csrc/utils/weights_loader.h"
 #include "../csrc/blocks/c3.h"
 
 static float max_abs_diff(const float* a, const float* b, int n) {
@@ -16,6 +15,51 @@ static float max_abs_diff(const float* a, const float* b, int n) {
 }
 
 int main(void) {
+    // .bin 파일에서 가중치 로드
+    weights_loader_t weights;
+    if (weights_load_from_file("assets/weights.bin", &weights) != 0) {
+        fprintf(stderr, "Failed to load weights.bin\n");
+        return 1;
+    }
+    
+    // 필요한 텐서 가져오기
+    const float* model_2_cv1_conv_weight = weights_get_tensor_data(&weights, "model.2.cv1.conv.weight");
+    const float* model_2_cv1_bn_weight = weights_get_tensor_data(&weights, "model.2.cv1.bn.weight");
+    const float* model_2_cv1_bn_bias = weights_get_tensor_data(&weights, "model.2.cv1.bn.bias");
+    const float* model_2_cv1_bn_running_mean = weights_get_tensor_data(&weights, "model.2.cv1.bn.running_mean");
+    const float* model_2_cv1_bn_running_var = weights_get_tensor_data(&weights, "model.2.cv1.bn.running_var");
+    
+    const float* model_2_cv2_conv_weight = weights_get_tensor_data(&weights, "model.2.cv2.conv.weight");
+    const float* model_2_cv2_bn_weight = weights_get_tensor_data(&weights, "model.2.cv2.bn.weight");
+    const float* model_2_cv2_bn_bias = weights_get_tensor_data(&weights, "model.2.cv2.bn.bias");
+    const float* model_2_cv2_bn_running_mean = weights_get_tensor_data(&weights, "model.2.cv2.bn.running_mean");
+    const float* model_2_cv2_bn_running_var = weights_get_tensor_data(&weights, "model.2.cv2.bn.running_var");
+    
+    const float* model_2_cv3_conv_weight = weights_get_tensor_data(&weights, "model.2.cv3.conv.weight");
+    const float* model_2_cv3_bn_weight = weights_get_tensor_data(&weights, "model.2.cv3.bn.weight");
+    const float* model_2_cv3_bn_bias = weights_get_tensor_data(&weights, "model.2.cv3.bn.bias");
+    const float* model_2_cv3_bn_running_mean = weights_get_tensor_data(&weights, "model.2.cv3.bn.running_mean");
+    const float* model_2_cv3_bn_running_var = weights_get_tensor_data(&weights, "model.2.cv3.bn.running_var");
+    
+    const float* model_2_m_0_cv1_conv_weight = weights_get_tensor_data(&weights, "model.2.m.0.cv1.conv.weight");
+    const float* model_2_m_0_cv1_bn_weight = weights_get_tensor_data(&weights, "model.2.m.0.cv1.bn.weight");
+    const float* model_2_m_0_cv1_bn_bias = weights_get_tensor_data(&weights, "model.2.m.0.cv1.bn.bias");
+    const float* model_2_m_0_cv1_bn_running_mean = weights_get_tensor_data(&weights, "model.2.m.0.cv1.bn.running_mean");
+    const float* model_2_m_0_cv1_bn_running_var = weights_get_tensor_data(&weights, "model.2.m.0.cv1.bn.running_var");
+    
+    const float* model_2_m_0_cv2_conv_weight = weights_get_tensor_data(&weights, "model.2.m.0.cv2.conv.weight");
+    const float* model_2_m_0_cv2_bn_weight = weights_get_tensor_data(&weights, "model.2.m.0.cv2.bn.weight");
+    const float* model_2_m_0_cv2_bn_bias = weights_get_tensor_data(&weights, "model.2.m.0.cv2.bn.bias");
+    const float* model_2_m_0_cv2_bn_running_mean = weights_get_tensor_data(&weights, "model.2.m.0.cv2.bn.running_mean");
+    const float* model_2_m_0_cv2_bn_running_var = weights_get_tensor_data(&weights, "model.2.m.0.cv2.bn.running_var");
+    
+    if (!model_2_cv1_conv_weight || !model_2_cv2_conv_weight || !model_2_cv3_conv_weight ||
+        !model_2_m_0_cv1_conv_weight || !model_2_m_0_cv2_conv_weight) {
+        fprintf(stderr, "Failed to find required tensors\n");
+        weights_free(&weights);
+        return 1;
+    }
+    
     // YOLOv5n Layer 2 (C3): 입력 (1, 32, 32, 32) → 출력 (1, 32, 32, 32)
     const int n = TV_C3_X_N;
     const int c_in = TV_C3_X_C;
@@ -105,6 +149,8 @@ int main(void) {
     const int elems = n * c_out * h_out * w_out;
     float diff = max_abs_diff(y_out, tv_c3_y, elems);
     printf("c3 max_abs_diff = %g\n", diff);
+    
+    weights_free(&weights);
     
     if (diff < 1e-4f) {
         printf("OK\n");
