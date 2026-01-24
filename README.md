@@ -284,6 +284,34 @@ python /path/to/yolov5n/tools/run_python_yolov5n_fused.py
 
 ---
 
+## 테스트
+
+### 블록별 단위 테스트
+
+```bash
+# 테스트 벡터 생성 (yolov5 venv 환경에서)
+cd /path/to/yolov5
+source .venv/bin/activate
+python /path/to/yolov5n/tools/gen_test_vectors.py --all
+
+# 테스트 빌드 및 실행
+cd /path/to/yolov5n
+gcc -o tests/test_conv tests/test_conv.c csrc/blocks/conv.c csrc/operations/conv2d.c csrc/operations/silu.c csrc/utils/weights_loader.c -I. -Icsrc -lm -std=c99 -O2
+./tests/test_conv
+```
+
+| 테스트 | 블록 | 검증 내용 |
+|--------|------|----------|
+| `test_conv` | Conv | Layer 0 (Conv 6x6 s2 + SiLU) |
+| `test_c3` | C3 | Layer 2 (C3, n=1, shortcut=True) |
+| `test_sppf` | SPPF | Layer 9 (MaxPool k=5 x3) |
+| `test_detect` | Detect | Layer 24 (1x1 Conv x3 스케일) |
+| `test_decode` | Decode | Anchor-based bbox 디코딩 |
+| `test_nms` | NMS | Non-Maximum Suppression |
+| `test_upsample` | Upsample | Nearest Neighbor 2x |
+
+---
+
 ## 상수 및 하이퍼파라미터
 
 ```c

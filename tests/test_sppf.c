@@ -1,3 +1,9 @@
+/**
+ * test_sppf.c - SPPF 블록 테스트 (Fused)
+ * 
+ * Layer 9: SPPF (k=5)
+ * 입력: 256x20x20 → 출력: 256x20x20
+ */
 #include <stdio.h>
 #include <math.h>
 
@@ -14,28 +20,25 @@ static float max_abs_diff(const float* a, const float* b, int n) {
     return m;
 }
 
+#define W(name) weights_get_tensor_data(&weights, name)
+
 int main(void) {
-    // .bin 파일에서 가중치 로드
+    printf("=== SPPF Block Test (Fused) ===\n\n");
+    
+    // 가중치 로드
     weights_loader_t weights;
     if (weights_load_from_file("assets/weights.bin", &weights) != 0) {
         fprintf(stderr, "Failed to load weights.bin\n");
         return 1;
     }
     
-    // 필요한 텐서 가져오기
-    const float* model_9_cv1_conv_weight = weights_get_tensor_data(&weights, "model.9.cv1.conv.weight");
-    const float* model_9_cv1_bn_weight = weights_get_tensor_data(&weights, "model.9.cv1.bn.weight");
-    const float* model_9_cv1_bn_bias = weights_get_tensor_data(&weights, "model.9.cv1.bn.bias");
-    const float* model_9_cv1_bn_running_mean = weights_get_tensor_data(&weights, "model.9.cv1.bn.running_mean");
-    const float* model_9_cv1_bn_running_var = weights_get_tensor_data(&weights, "model.9.cv1.bn.running_var");
+    // Layer 9 SPPF 가중치 (Fused: conv.weight + conv.bias)
+    const float* cv1_w = W("model.9.cv1.conv.weight");
+    const float* cv1_b = W("model.9.cv1.conv.bias");
+    const float* cv2_w = W("model.9.cv2.conv.weight");
+    const float* cv2_b = W("model.9.cv2.conv.bias");
     
-    const float* model_9_cv2_conv_weight = weights_get_tensor_data(&weights, "model.9.cv2.conv.weight");
-    const float* model_9_cv2_bn_weight = weights_get_tensor_data(&weights, "model.9.cv2.bn.weight");
-    const float* model_9_cv2_bn_bias = weights_get_tensor_data(&weights, "model.9.cv2.bn.bias");
-    const float* model_9_cv2_bn_running_mean = weights_get_tensor_data(&weights, "model.9.cv2.bn.running_mean");
-    const float* model_9_cv2_bn_running_var = weights_get_tensor_data(&weights, "model.9.cv2.bn.running_var");
-    
-    if (!model_9_cv1_conv_weight || !model_9_cv2_conv_weight) {
+    if (!cv1_w || !cv1_b || !cv2_w || !cv2_b) {
         fprintf(stderr, "Failed to find required tensors\n");
         weights_free(&weights);
         return 1;
@@ -45,39 +48,34 @@ int main(void) {
     const int c_in = TV_SPPF_X_C;
     const int h = TV_SPPF_X_H;
     const int w = TV_SPPF_X_W;
-
     const int c_out = TV_SPPF_Y_C;
     const int h_out = TV_SPPF_Y_H;
     const int w_out = TV_SPPF_Y_W;
 
-    static float y_out[TV_SPPF_X_N * TV_SPPF_Y_C * TV_SPPF_Y_H * TV_SPPF_Y_W];
+    static float y_out[1 * 256 * 20 * 20];
 
-    // YOLOv5n SPPF(Layer 9): cv1(256->128) + pool(k=5)x3 + concat + cv2(512->256)
+    // SPPF 블록 실행 (Fused)
     sppf_nchw_f32(
         tv_sppf_x, n, c_in, h, w,
-        // cv1
-        model_9_cv1_conv_weight, 128,
-        model_9_cv1_bn_weight, model_9_cv1_bn_bias,
-        model_9_cv1_bn_running_mean, model_9_cv1_bn_running_var,
-        // cv2
-        model_9_cv2_conv_weight, 256,
-        model_9_cv2_bn_weight, model_9_cv2_bn_bias,
-        model_9_cv2_bn_running_mean, model_9_cv2_bn_running_var,
-        // pool
-        5,
-        1e-3f,
+        cv1_w, 128, cv1_b,  // cv1: 256->128
+        cv2_w, 256, cv2_b,  // cv2: 512->256
+        5,                   // pool_k=5
         y_out);
 
     const int elems = n * c_out * h_out * w_out;
     float diff = max_abs_diff(y_out, tv_sppf_y, elems);
-    printf("sppf max_abs_diff = %g\n", diff);
+    
+    printf("Layer 9 (SPPF, k=5)\n");
+    printf("  Input:  %d x %d x %d x %d\n", n, c_in, h, w);
+    printf("  Output: %d x %d x %d x %d\n", n, c_out, h_out, w_out);
+    printf("  Max diff: %g\n\n", diff);
     
     weights_free(&weights);
 
     if (diff < 1e-4f) {
-        printf("OK\n");
+        printf("Result: OK\n");
         return 0;
     }
-    printf("NG\n");
+    printf("Result: NG\n");
     return 1;
 }
