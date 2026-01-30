@@ -1,21 +1,22 @@
 #include "image_loader.h"
-#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#ifndef BARE_METAL
+#include <stdio.h>
+#endif
 
 static inline void safe_read(void* dest, const uint8_t** src, size_t size) {
     memcpy(dest, *src, size);
     *src += size;
 }
 
-static int parse_image_data(const uint8_t* ptr, size_t data_len, preprocessed_image_t* img) {
+static int parse_image_data(const uint8_t* ptr, size_t data_len, preprocessed_image_t* img, int zero_copy) {
     const uint8_t* curr = ptr;
     const uint8_t* end = ptr + data_len;
 
-    // 헤더 크기: 6 * 4 bytes = 24 bytes
     if (curr + 24 > end) return -1;
-
+    // 헤더 24B
     uint32_t original_w, original_h, size;
     float scale;
     uint32_t pad_x, pad_y;
@@ -36,21 +37,27 @@ static int parse_image_data(const uint8_t* ptr, size_t data_len, preprocessed_im
     img->h = (int32_t)size;
     img->w = (int32_t)size;
     
-    // 데이터 복사
-    size_t data_bytes = 3 * size * size * sizeof(float);
+    size_t data_bytes = 3 * (size_t)size * (size_t)size * sizeof(float);
     if (curr + data_bytes > end) return -1;
 
-    img->data = (float*)malloc(data_bytes);
-    if (!img->data) return -1;
-
-    safe_read(img->data, &curr, data_bytes);
+    if (zero_copy) {
+        img->data = (float*)curr;
+        img->data_owned = 0;
+    } else {
+        img->data = (float*)malloc(data_bytes);
+        if (!img->data) return -1;
+        safe_read(img->data, &curr, data_bytes);
+        img->data_owned = 1;
+    }
     return 0;
 }
 
-int image_init_from_memory(uintptr_t base_addr, preprocessed_image_t* img) {
-    return parse_image_data((const uint8_t*)base_addr, 0x7FFFFFFF, img);
+int image_init_from_memory(uintptr_t base_addr, size_t size, preprocessed_image_t* img) {
+    if (!img || size < 24) return -1;
+    return parse_image_data((const uint8_t*)base_addr, size, img, 1);
 }
 
+#ifndef BARE_METAL
 int image_load_from_bin(const char* bin_path, preprocessed_image_t* img) {
     FILE* f = fopen(bin_path, "rb");
     if (!f) {
@@ -75,15 +82,16 @@ int image_load_from_bin(const char* bin_path, preprocessed_image_t* img) {
     }
     fclose(f);
     
-    int ret = parse_image_data(buffer, file_size, img);
-    free(buffer); // 복사 완료했으므로 임시 버퍼 해제
+    int ret = parse_image_data(buffer, file_size, img, 0);
+    free(buffer);
     
     return ret;
 }
+#endif
 
 void image_free(preprocessed_image_t* img) {
     if (!img) return;
-    if (img->data) {
+    if (img->data_owned && img->data) {
         free(img->data);
         img->data = NULL;
     }

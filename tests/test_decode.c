@@ -1,9 +1,4 @@
-/**
- * test_decode.c - Decode 블록 테스트 (Anchor-based)
- * 
- * Detect 출력(255ch)을 bbox로 디코딩
- * 255 = 3앵커 x 85 (4 bbox + 1 obj + 80 classes)
- */
+/* Decode 블록 테스트 (255ch → bbox). */
 #include <stdio.h>
 #include <math.h>
 

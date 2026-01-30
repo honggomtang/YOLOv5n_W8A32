@@ -1,4 +1,4 @@
-
+.cursor/
 !tests/test_*.c    # 소스 파일은 제외
 # Python 관련
 # Vivado/Vitis 관련 임시 파일
@@ -6,8 +6,15 @@
 # 빌드 결과물
 *.bit              # FPGA 비트스트림 파일 (필요시 제외 가능)
 *.dSYM/
-*.dSYM/            # 디버그 심볼 디렉토리.DS_Store
-*.elf              # MicroBlaze 실행 파일
+.DS_Store
+*.elf
+*.exe
+main.exe
+build_log.txt
+gcc_build_log.txt
+gcc_err.txt
+gcc_out.txt
+err.txt
 *.jou              # 저널 파일
 *.log              # 로그 파일
 *.pt               # PyTorch 원본 모델

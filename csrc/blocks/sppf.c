@@ -3,6 +3,7 @@
 #include "../operations/silu.h"
 #include "../operations/maxpool2d.h"
 #include "../operations/concat.h"
+#include "../utils/feature_pool.h"
 
 void sppf_nchw_f32(
     const float* x, int32_t n, int32_t c_in, int32_t h, int32_t w,
@@ -13,21 +14,30 @@ void sppf_nchw_f32(
 {
     const int32_t pad = pool_k / 2;
 
-    static float x1[1024 * 1024];
-    static float y1[1024 * 1024];
-    static float y2[1024 * 1024];
-    static float y3[1024 * 1024];
-    static float cat[1024 * 1024];
-    static float cv2_out[1024 * 1024];
+    size_t x1_bytes = (size_t)n * (size_t)cv1_c_out * (size_t)h * (size_t)w * sizeof(float);
+    size_t cat_bytes = (size_t)n * (size_t)(4 * cv1_c_out) * (size_t)h * (size_t)w * sizeof(float);
 
-    // cv1: 1x1 Conv + Bias + SiLU
+    float* x1 = (float*)feature_pool_alloc(x1_bytes);
+    float* y1 = (float*)feature_pool_alloc(x1_bytes);
+    float* y2 = (float*)feature_pool_alloc(x1_bytes);
+    float* y3 = (float*)feature_pool_alloc(x1_bytes);
+    float* cat = (float*)feature_pool_alloc(cat_bytes);
+
+    if (!x1 || !y1 || !y2 || !y3 || !cat) {
+        if (cat) feature_pool_free(cat);
+        if (y3) feature_pool_free(y3);
+        if (y2) feature_pool_free(y2);
+        if (y1) feature_pool_free(y1);
+        if (x1) feature_pool_free(x1);
+        return;
+    }
+    // cv1
     conv2d_nchw_f32(x, n, c_in, h, w,
                     cv1_w, cv1_c_out, 1, 1,
                     cv1_bias, 1, 1, 0, 0, 1,
                     x1, h, w);
     silu_nchw_f32(x1, n, cv1_c_out, h, w, x1);
 
-    // MaxPool 3회
     maxpool2d_nchw_f32(x1, n, cv1_c_out, h, w, pool_k, 1, pad, y1, h, w);
     maxpool2d_nchw_f32(y1, n, cv1_c_out, h, w, pool_k, 1, pad, y2, h, w);
     maxpool2d_nchw_f32(y2, n, cv1_c_out, h, w, pool_k, 1, pad, y3, h, w);
@@ -35,11 +45,16 @@ void sppf_nchw_f32(
     // Concat [x1, y1, y2, y3]
     concat4_nchw_f32(x1, cv1_c_out, y1, cv1_c_out, y2, cv1_c_out, y3, cv1_c_out,
                      n, h, w, cat);
-
-    // cv2: 1x1 Conv + Bias + SiLU
+    // cv2
     conv2d_nchw_f32(cat, n, 4 * cv1_c_out, h, w,
                     cv2_w, cv2_c_out, 1, 1,
                     cv2_bias, 1, 1, 0, 0, 1,
-                    cv2_out, h, w);
-    silu_nchw_f32(cv2_out, n, cv2_c_out, h, w, y);
+                    y, h, w);
+    silu_nchw_f32(y, n, cv2_c_out, h, w, y);
+
+    feature_pool_free(cat);
+    feature_pool_free(y3);
+    feature_pool_free(y2);
+    feature_pool_free(y1);
+    feature_pool_free(x1);
 }

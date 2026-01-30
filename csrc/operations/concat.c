@@ -48,19 +48,16 @@ void concat4_nchw_f32(
             const int32_t dst = ((ni * c0123 + ci) * h) * w;
             for (int32_t i = 0; i < hw; i++) y[dst + i] = x0[src + i];
         }
-        // x1
         for (int32_t ci = 0; ci < c1; ci++) {
             const int32_t src = ((ni * c1 + ci) * h) * w;
             const int32_t dst = ((ni * c0123 + (c0 + ci)) * h) * w;
             for (int32_t i = 0; i < hw; i++) y[dst + i] = x1[src + i];
         }
-        // x2
         for (int32_t ci = 0; ci < c2; ci++) {
             const int32_t src = ((ni * c2 + ci) * h) * w;
             const int32_t dst = ((ni * c0123 + (c01 + ci)) * h) * w;
             for (int32_t i = 0; i < hw; i++) y[dst + i] = x2[src + i];
         }
-        // x3
         for (int32_t ci = 0; ci < c3; ci++) {
             const int32_t src = ((ni * c3 + ci) * h) * w;
             const int32_t dst = ((ni * c0123 + (c012 + ci)) * h) * w;

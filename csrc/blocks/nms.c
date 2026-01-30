@@ -3,11 +3,9 @@
 #include <string.h>
 #include <math.h>
 
-// IoU 계산 (center+size → corner 변환 후 IoU)
 float calculate_iou(const detection_t* box1, const detection_t* box2) {
     if (!box1 || !box2) return 0.0f;
     
-    // center+size 형식을 x1, y1, x2, y2로 변환
     float x1_1 = box1->x - box1->w / 2.0f;
     float y1_1 = box1->y - box1->h / 2.0f;
     float x2_1 = box1->x + box1->w / 2.0f;
@@ -17,8 +15,7 @@ float calculate_iou(const detection_t* box1, const detection_t* box2) {
     float y1_2 = box2->y - box2->h / 2.0f;
     float x2_2 = box2->x + box2->w / 2.0f;
     float y2_2 = box2->y + box2->h / 2.0f;
-    
-    // 교집합 계산
+    // 교집합
     float x1_i = fmaxf(x1_1, x1_2);
     float y1_i = fmaxf(y1_1, y1_2);
     float x2_i = fminf(x2_1, x2_2);
@@ -30,7 +27,6 @@ float calculate_iou(const detection_t* box1, const detection_t* box2) {
     
     float intersection = (x2_i - x1_i) * (y2_i - y1_i);
     
-    // 합집합 계산
     float area1 = (x2_1 - x1_1) * (y2_1 - y1_1);
     float area2 = (x2_2 - x1_2) * (y2_2 - y1_2);
     float union_area = area1 + area2 - intersection;
@@ -40,7 +36,6 @@ float calculate_iou(const detection_t* box1, const detection_t* box2) {
     return intersection / union_area;
 }
 
-// Greedy NMS: confidence 내림차순 입력을 가정하고 같은 클래스끼리만 억제
 int nms(
     detection_t* detections,
     int32_t num_detections,
@@ -55,37 +50,31 @@ int nms(
     
     *output_detections = NULL;
     *output_count = 0;
-    
-    // 주의: 입력 detection 배열은 confidence 내림차순 정렬 상태여야 함
-    
-    // 유지할 detection 추적
+    // keep[i]==1 유지, -1 제거
     int* keep = (int*)calloc(num_detections, sizeof(int));
     if (!keep) return -1;
     
     int keep_count = 0;
     
-    // Greedy NMS: 각 detection에 대해 겹치는 것들 제거
     for (int i = 0; i < num_detections && keep_count < max_detections; i++) {
-        if (keep[i] == -1) continue;  // 이미 제거됨
+        if (keep[i] == -1) continue;
         
         keep[i] = 1;  // 유지
         keep_count++;
         
         // 같은 클래스의 겹치는 detection 제거
         for (int j = i + 1; j < num_detections; j++) {
-            if (keep[j] == -1) continue;  // 이미 제거됨
+            if (keep[j] == -1) continue;
             
-            // 같은 클래스인지 확인
             if (detections[i].cls_id != detections[j].cls_id) continue;
             
             float iou = calculate_iou(&detections[i], &detections[j]);
             if (iou > iou_threshold) {
-                keep[j] = -1;  // 제거
+                keep[j] = -1;
             }
         }
     }
     
-    // 출력 배열 할당
     if (keep_count > 0) {
         *output_detections = (detection_t*)malloc(keep_count * sizeof(detection_t));
         if (!*output_detections) {

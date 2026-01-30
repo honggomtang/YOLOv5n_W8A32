@@ -1,9 +1,4 @@
-/**
- * test_sppf.c - SPPF 블록 테스트 (Fused)
- * 
- * Layer 9: SPPF (k=5)
- * 입력: 256x20x20 → 출력: 256x20x20
- */
+/* SPPF 블록 테스트 (Layer 9: 256x20x20 → 256x20x20). */
 #include <stdio.h>
 #include <math.h>
 

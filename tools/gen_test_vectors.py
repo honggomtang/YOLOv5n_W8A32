@@ -1,20 +1,10 @@
 #!/usr/bin/env python3
-"""
-테스트 벡터 생성 (Fused 모델용)
-
-모든 블록의 테스트 벡터를 한번에 생성합니다.
-
-사용법:
-    cd /path/to/yolov5
-    source .venv/bin/activate
-    python /path/to/yolov5n/tools/gen_test_vectors.py
-"""
+"""Fused 모델용 테스트 벡터 생성 (모든 블록)."""
 import os
 import sys
 from pathlib import Path
 import argparse
 
-# YOLOv5 repo 경로 설정 (기본: ~/Desktop/yolov5, 또는 환경변수 YOLOV5_REPO)
 YOLOV5_REPO = Path(os.environ.get("YOLOV5_REPO", str(Path.home() / "Desktop" / "yolov5")))
 if YOLOV5_REPO.exists():
     sys.path.insert(0, str(YOLOV5_REPO))
@@ -22,7 +12,6 @@ if YOLOV5_REPO.exists():
 import numpy as np
 import torch
 
-# 프로젝트 경로
 PROJECT_DIR = Path(__file__).parent.parent
 TESTS_DIR = PROJECT_DIR / "tests"
 WEIGHTS_PATH = PROJECT_DIR / "assets" / "yolov5n.pt"

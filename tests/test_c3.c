@@ -1,9 +1,4 @@
-/**
- * test_c3.c - C3 블록 테스트 (Fused)
- * 
- * Layer 2: C3 (n=1, shortcut=True)
- * 입력: 32x160x160 → 출력: 32x160x160
- */
+/* C3 블록 테스트 (Layer 2: 32x160x160 → 32x160x160). */
 #include <stdio.h>
 #include <math.h>
 

@@ -1,8 +1,4 @@
-"""
-Fused 모델로 detections_ref.bin 생성 (로컬 yolov5 레포 사용)
-
-C 코드와 동일한 HW 출력 포맷 (바이너리)
-"""
+"""Fused 모델로 detections_ref.bin 생성 (yolov5 레포, C와 동일 HW 포맷)."""
 
 import argparse
 import os

@@ -1,11 +1,4 @@
-/**
- * test_detect.c - Detect Head 테스트 (Anchor-based Fused)
- * 
- * Layer 24: 3개 스케일에서 1x1 Conv로 255채널 출력
- * P3: 64x80x80 → 255x80x80
- * P4: 128x40x40 → 255x40x40
- * P5: 256x20x20 → 255x20x20
- */
+/* Detect Head 테스트 (Layer 24: P3/P4/P5 → 255ch). */
 #include <stdio.h>
 #include <math.h>
 

@@ -1,6 +1,5 @@
 #include "maxpool2d.h"
 
-// 느리지만 맞는 버전
 void maxpool2d_nchw_f32(
     const float* x, int32_t n, int32_t c, int32_t h, int32_t w,
     int32_t k, int32_t stride, int32_t pad,

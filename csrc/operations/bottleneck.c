@@ -1,6 +1,7 @@
 #include "bottleneck.h"
 #include "conv2d.h"
 #include "silu.h"
+#include "../utils/feature_pool.h"
 
 void bottleneck_nchw_f32(
     const float* x, int32_t n, int32_t c, int32_t h, int32_t w,
@@ -9,24 +10,28 @@ void bottleneck_nchw_f32(
     int32_t shortcut,
     float* y)
 {
-    static float cv1_out[1024 * 1024];
-    static float cv2_out[1024 * 1024];
+    size_t cv1_bytes = (size_t)n * (size_t)cv1_c_out * (size_t)h * (size_t)w * sizeof(float);
+    size_t cv2_bytes = (size_t)n * (size_t)cv2_c_out * (size_t)h * (size_t)w * sizeof(float);
+    float* cv1_out = (float*)feature_pool_alloc(cv1_bytes);
+    float* cv2_out = (float*)feature_pool_alloc(cv2_bytes);
+    if (!cv1_out || !cv2_out) {
+        if (cv2_out) feature_pool_free(cv2_out);
+        if (cv1_out) feature_pool_free(cv1_out);
+        return;
+    }
     
-    // cv1: 1x1 Conv + Bias + SiLU
     conv2d_nchw_f32(x, n, c, h, w,
                     cv1_w, cv1_c_out, 1, 1,
                     cv1_bias, 1, 1, 0, 0, 1,
                     cv1_out, h, w);
     silu_nchw_f32(cv1_out, n, cv1_c_out, h, w, cv1_out);
-    
-    // cv2: 3x3 Conv + Bias + SiLU
+    // cv2
     conv2d_nchw_f32(cv1_out, n, cv1_c_out, h, w,
                     cv2_w, cv2_c_out, 3, 3,
                     cv2_bias, 1, 1, 1, 1, 1,
                     cv2_out, h, w);
     silu_nchw_f32(cv2_out, n, cv2_c_out, h, w, cv2_out);
-    
-    // Shortcut (only if shortcut=1 and dimensions match)
+    // Shortcut
     if (shortcut && c == cv2_c_out) {
         int32_t size = n * c * h * w;
         for (int32_t i = 0; i < size; i++) {
@@ -38,4 +43,7 @@ void bottleneck_nchw_f32(
             y[i] = cv2_out[i];
         }
     }
+
+    feature_pool_free(cv2_out);
+    feature_pool_free(cv1_out);
 }

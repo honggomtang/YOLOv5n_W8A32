@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-// Detection 결과 구조체 (내부 처리용, float)
 typedef struct {
     float x, y, w, h;   // 중심 좌표 및 크기 (normalized)
     float conf;         // confidence score
@@ -17,8 +16,6 @@ typedef struct {
 #define YOLO_PACKED
 #endif
 
-// HW 출력용 구조체 (8 bytes, 고정 크기)
-// 실제 FPGA에서 호스트로 전송하는 형식
 typedef struct YOLO_PACKED {
     uint16_t x, y, w, h;   // 픽셀 좌표 (정수, 0~65535)
     uint8_t  class_id;     // 클래스 ID (0~79)

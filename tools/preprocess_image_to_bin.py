@@ -1,6 +1,4 @@
-"""
-이미지 전처리 (letterbox + normalize) → C용 .bin 파일 저장
-"""
+"""이미지 전처리 (letterbox + normalize) → C용 .bin 저장."""
 
 from __future__ import annotations
 

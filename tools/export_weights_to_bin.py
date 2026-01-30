@@ -1,23 +1,45 @@
-"""
-PyTorch .pt 모델을 C용 weights.bin으로 변환 (Fused 모델 지원)
-"""
+# -*- coding: utf-8 -*-
+"""PyTorch .pt → C weights.bin (Fused 모델 지원)."""
 
 from __future__ import annotations
 
 import argparse
+import pickle
+import sys
+import types
 from pathlib import Path
 from typing import Any, Dict
 import struct
 import numpy as np
 import torch
 
+_YOLOv5ModelStub = type("Model", (torch.nn.Module,), {})
+
+
+class _YOLOv5Unpickler(pickle.Unpickler):
+    """YOLOv5 .pt 로드용 스텁 (models.* 대체)."""
+
+    def find_class(self, module: str, name: str) -> Any:
+        if module == "models.yolo" and name == "Model":
+            return _YOLOv5ModelStub
+        if module.startswith("models."):
+            return type(name, (torch.nn.Module,), {})
+        return super().find_class(module, name)
+
+
+def _make_stub_pickle_module():
+    m = types.ModuleType("_stub_pickle")
+    m.Unpickler = _YOLOv5Unpickler
+    for attr in ("load", "loads", "dump", "dumps", "PROTOCOL", "HIGHEST_PROTOCOL"):
+        if hasattr(pickle, attr):
+            setattr(m, attr, getattr(pickle, attr))
+    return m
+
 
 def _load_state_dict(obj: Any) -> Dict[str, Any]:
-    """YOLOv5 .pt에서 state_dict 추출 (여러 형식 지원)"""
+    """YOLOv5 .pt에서 state_dict 추출."""
     # Plain state_dict case
     if isinstance(obj, dict) and all(isinstance(k, str) for k in obj.keys()):
-        # If values look like tensors, this might already be a state_dict.
-        # But YOLOv5 checkpoints often have 'model'/'ema' entries.
         if "state_dict" in obj and isinstance(obj["state_dict"], dict):
             return obj["state_dict"]
         if "model" in obj:
@@ -72,22 +94,28 @@ def main() -> int:
     state_dict = None
 
     if args.classic:
-        # Anchor-based YOLOv5n (model.24.m.0/m.1/m.2, 255ch)
+        # Anchor-based YOLOv5n (121 tensors). torch.hub만 사용 — 스텁 폴백은 349개(.bias 누락)라 C 호환 불가.
         try:
-            model = torch.hub.load(
-                "ultralytics/yolov5",
-                "custom",
-                path=str(pt_path),
-                force_reload=False,
-                trust_repo=True,
+            import ultralytics  # noqa: F401
+        except ModuleNotFoundError:
+            raise SystemExit(
+                "ERROR: ultralytics not installed for this Python.\n"
+                f"Current Python: {sys.executable}\n"
+                "Run: py -3.11 -m pip install ultralytics torch numpy\n"
+                "Then run this script again with: py -3.11 tools/export_weights_to_bin.py --pt ... --out ... --classic"
             )
-            state_dict = model.state_dict()
-            print("Loaded model using torch.hub ultralytics/yolov5 (classic)")
-        except Exception as e:
-            raise RuntimeError(
-                f"Classic export failed (needs network): {e}\n"
-                "Run from env with internet, or use export without --classic."
-            ) from e
+        print(f"Using Python: {sys.executable}")
+        model = torch.hub.load(
+            "ultralytics/yolov5",
+            "custom",
+            path=str(pt_path),
+            force_reload=False,
+            trust_repo=True,
+        )
+        state_dict = model.state_dict()
+        print("Loaded model using torch.hub ultralytics/yolov5 (classic)")
+        if len(state_dict) != 121:
+            print(f"Note: state_dict has {len(state_dict)} tensors (expected 121 for YOLOv5n)")
 
     if state_dict is None:
         # DFL(Ultralytics) 또는 torch.load 폴백
@@ -138,6 +166,12 @@ def main() -> int:
             f.write(struct.pack("I", len(shape)))
             for dim in shape:
                 f.write(struct.pack("I", dim))
+            
+            # RISC-V 등: float 데이터를 4바이트 정렬 (misalign trap 방지)
+            pos = f.tell()
+            pad = (4 - (pos % 4)) % 4
+            if pad:
+                f.write(b"\x00" * pad)
             
             # 텐서 데이터 (float32)
             data = tensor.cpu().numpy().astype(np.float32)

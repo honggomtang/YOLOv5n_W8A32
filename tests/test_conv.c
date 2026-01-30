@@ -1,9 +1,4 @@
-/**
- * test_conv.c - Conv 블록 테스트 (Fused)
- * 
- * Layer 0: Conv 6x6 s2 + SiLU
- * 입력: 3x640x640 → 출력: 16x320x320
- */
+/* Conv 블록 테스트 (Layer 0: 3x640x640 → 16x320x320). */
 #include <stdio.h>
 #include <math.h>
 
@@ -23,14 +18,12 @@ static float max_abs_diff(const float* a, const float* b, int n) {
 int main(void) {
     printf("=== Conv Block Test (Fused) ===\n\n");
     
-    // 가중치 로드
     weights_loader_t weights;
     if (weights_load_from_file("assets/weights.bin", &weights) != 0) {
         fprintf(stderr, "Failed to load weights.bin\n");
         return 1;
     }
     
-    // Fused 모델에서는 conv.weight + conv.bias만 필요
     const float* conv_weight = weights_get_tensor_data(&weights, "model.0.conv.weight");
     const float* conv_bias = weights_get_tensor_data(&weights, "model.0.conv.bias");
     

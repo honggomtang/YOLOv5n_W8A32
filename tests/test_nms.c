@@ -15,7 +15,6 @@ static float max_abs_diff(const float* a, const float* b, int n) {
     return m;
 }
 
-// detection 배열을 confidence 내림차순으로 정렬 (버블 정렬)
 static void sort_detections_by_conf(detection_t* detections, int32_t num) {
     for (int i = 0; i < num - 1; i++) {
         for (int j = 0; j < num - 1 - i; j++) {

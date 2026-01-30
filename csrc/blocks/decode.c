@@ -1,9 +1,3 @@
-/**
- * Classic YOLOv5n Anchor-based Decode
- * 255ch = 3 * 85. Layout: [anchor0_85, anchor1_85, anchor2_85].
- * base = (a*85)*(H*W) + (y*W+x). x,y,w,h,obj,cls0..79.
- */
-
 #include "decode.h"
 #include <math.h>
 #include <stdlib.h>
@@ -25,7 +19,7 @@ int32_t decode_nchw_f32(
     int32_t max_detections)
 {
     int32_t count = 0;
-    const int32_t no = 5 + num_classes;  /* 85 */
+    const int32_t no = 5 + num_classes;
 
     for (int scale = 0; scale < 3; scale++) {
         const float* feat = NULL;

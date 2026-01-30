@@ -1,24 +1,11 @@
 #!/usr/bin/env python3
-"""
-Detection 바이너리 파일 디코딩 및 시각화
-
-사용법:
-    # C 결과 디코딩 + 시각화
-    python tools/decode_detections.py
-    
-    # Python 참조 결과
-    python tools/decode_detections.py --ref
-    
-    # 둘 다 비교
-    python tools/decode_detections.py --compare
-"""
+"""Detection 바이너리 디코딩 및 시각화."""
 
 import argparse
 import struct
 from pathlib import Path
 from dataclasses import dataclass
 
-# COCO 클래스 이름
 COCO_CLASSES = [
     'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
     'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat',

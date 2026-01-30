@@ -1,7 +1,5 @@
 #include "upsample.h"
 
-// Nearest neighbor ×2 upsampling
-// 각 입력 픽셀을 2×2 블록으로 복제
 void upsample_nearest2x_nchw_f32(
     const float* x, int32_t n, int32_t c, int32_t h, int32_t w,
     float* y)
@@ -16,7 +14,6 @@ void upsample_nearest2x_nchw_f32(
                     const int32_t in_idx = ((ni * c + ci) * h + ih) * w + iw;
                     const float val = x[in_idx];
 
-                    // 2×2 블록으로 복제
                     const int32_t oh0 = ih * 2;
                     const int32_t oh1 = ih * 2 + 1;
                     const int32_t ow0 = iw * 2;

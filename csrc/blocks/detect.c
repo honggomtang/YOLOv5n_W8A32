@@ -1,13 +1,3 @@
-/**
- * Classic YOLOv5n Detect Head (Anchor-based)
- *
- * P3(64,H,W) -> Conv 1x1 64->255 -> (255,H,W)
- * P4(128,H,W) -> Conv 1x1 128->255 -> (255,H,W)
- * P5(256,H,W) -> Conv 1x1 256->255 -> (255,H,W)
- *
- * 가중치: model.24.m.0, m.1, m.2 (weight, bias).
- */
-
 #include "detect.h"
 #include "../operations/conv2d.h"
 
