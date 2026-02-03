@@ -1,4 +1,5 @@
 #include "decode.h"
+#include "../utils/timing.h"
 #include <math.h>
 #include <stdlib.h>
 
@@ -18,6 +19,7 @@ int32_t decode_nchw_f32(
     detection_t* detections,
     int32_t max_detections)
 {
+    yolo_timing_begin("decode");
     int32_t count = 0;
     const int32_t no = 5 + num_classes;
 
@@ -87,5 +89,6 @@ int32_t decode_nchw_f32(
         }
     }
 done:
+    yolo_timing_end();
     return count;
 }

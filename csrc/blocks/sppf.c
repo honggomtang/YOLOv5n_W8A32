@@ -4,6 +4,7 @@
 #include "../operations/maxpool2d.h"
 #include "../operations/concat.h"
 #include "../utils/feature_pool.h"
+#include "../utils/timing.h"
 
 void sppf_nchw_f32(
     const float* x, int32_t n, int32_t c_in, int32_t h, int32_t w,
@@ -31,26 +32,31 @@ void sppf_nchw_f32(
         if (x1) feature_pool_free(x1);
         return;
     }
-    // cv1
+    yolo_timing_begin("cv1");
     conv2d_nchw_f32(x, n, c_in, h, w,
                     cv1_w, cv1_c_out, 1, 1,
                     cv1_bias, 1, 1, 0, 0, 1,
                     x1, h, w);
     silu_nchw_f32(x1, n, cv1_c_out, h, w, x1);
+    yolo_timing_end();
 
+    yolo_timing_begin("maxpool");
     maxpool2d_nchw_f32(x1, n, cv1_c_out, h, w, pool_k, 1, pad, y1, h, w);
     maxpool2d_nchw_f32(y1, n, cv1_c_out, h, w, pool_k, 1, pad, y2, h, w);
     maxpool2d_nchw_f32(y2, n, cv1_c_out, h, w, pool_k, 1, pad, y3, h, w);
+    yolo_timing_end();
 
-    // Concat [x1, y1, y2, y3]
+    yolo_timing_begin("concat");
     concat4_nchw_f32(x1, cv1_c_out, y1, cv1_c_out, y2, cv1_c_out, y3, cv1_c_out,
                      n, h, w, cat);
-    // cv2
+    yolo_timing_end();
+    yolo_timing_begin("cv2");
     conv2d_nchw_f32(cat, n, 4 * cv1_c_out, h, w,
                     cv2_w, cv2_c_out, 1, 1,
                     cv2_bias, 1, 1, 0, 0, 1,
                     y, h, w);
     silu_nchw_f32(y, n, cv2_c_out, h, w, y);
+    yolo_timing_end();
 
     feature_pool_free(cat);
     feature_pool_free(y3);

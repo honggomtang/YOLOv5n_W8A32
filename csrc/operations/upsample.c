@@ -1,9 +1,11 @@
 #include "upsample.h"
+#include "../utils/timing.h"
 
 void upsample_nearest2x_nchw_f32(
     const float* x, int32_t n, int32_t c, int32_t h, int32_t w,
     float* y)
 {
+    yolo_timing_begin("upsample");
     const int32_t out_h = h * 2;
     const int32_t out_w = w * 2;
 
@@ -27,4 +29,5 @@ void upsample_nearest2x_nchw_f32(
             }
         }
     }
+    yolo_timing_end();
 }

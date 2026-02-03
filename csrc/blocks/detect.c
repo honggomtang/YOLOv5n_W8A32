@@ -1,5 +1,6 @@
 #include "detect.h"
 #include "../operations/conv2d.h"
+#include "../utils/timing.h"
 
 void detect_nchw_f32(
     const float* p3, int32_t p3_c, int32_t p3_h, int32_t p3_w,
@@ -10,6 +11,7 @@ void detect_nchw_f32(
     const float* m2_w, const float* m2_b,
     float* p3_out, float* p4_out, float* p5_out)
 {
+    yolo_timing_begin("detect");
     conv2d_nchw_f32(p3, 1, p3_c, p3_h, p3_w,
         m0_w, 255, 1, 1, m0_b, 1, 1, 0, 0, 1,
         p3_out, p3_h, p3_w);
@@ -19,4 +21,5 @@ void detect_nchw_f32(
     conv2d_nchw_f32(p5, 1, p5_c, p5_h, p5_w,
         m2_w, 255, 1, 1, m2_b, 1, 1, 0, 0, 1,
         p5_out, p5_h, p5_w);
+    yolo_timing_end();
 }

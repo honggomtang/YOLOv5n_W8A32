@@ -17,6 +17,7 @@
 #include "operations/concat.h"
 #include "utils/feature_pool.h"
 #include "utils/mcycle.h"
+#include "utils/timing.h"
 #ifdef BARE_METAL
 #include "platform_config.h"
 #include "xil_cache.h"
@@ -190,6 +191,7 @@ int main(int argc, char* argv[]) {
     }
 #endif
     YOLO_LOG("Running inference...\n");
+    yolo_timing_reset();
     uint64_t t_total_start = timer_read64();
     uint64_t t_stage_start;
     uint64_t t_layer;
@@ -200,6 +202,7 @@ int main(int argc, char* argv[]) {
 
     // ===== Backbone =====
     t_stage_start = timer_read64();
+    yolo_timing_set_layer(0);
     // Layer 0: Conv 6x6 s2
     POOL_ALLOC(l0, sz_l0);
     t_layer = timer_read64();
@@ -208,10 +211,12 @@ int main(int argc, char* argv[]) {
         W("model.0.conv.bias"), l0, 320, 320);
     layer_cycles[0] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(0, layer_cycles[0], &l0[0]);
+    yolo_timing_print_layer_ops(0);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l0, 16);
 #endif
 
+    yolo_timing_set_layer(1);
     // Layer 1: Conv 3x3 s2
     POOL_ALLOC(l1, sz_l1);
     t_layer = timer_read64();
@@ -220,11 +225,13 @@ int main(int argc, char* argv[]) {
         W("model.1.conv.bias"), l1, 160, 160);
     layer_cycles[1] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(1, layer_cycles[1], &l1[0]);
+    yolo_timing_print_layer_ops(1);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l1, 16);
 #endif
     feature_pool_free(l0);
 
+    yolo_timing_set_layer(2);
     // Layer 2: C3 (n=1)
 #ifdef BARE_METAL
     { size_t largest = feature_pool_get_largest_free(); YOLO_LOG("  before L2 pool largest_free=%u\n", (unsigned)largest); }
@@ -242,11 +249,13 @@ int main(int argc, char* argv[]) {
         1, l2_cv1w, l2_cv1b, l2_cv2w, l2_cv2b, 1, l2);  // shortcut=1
     layer_cycles[2] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(2, layer_cycles[2], &l2[0]);
+    yolo_timing_print_layer_ops(2);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l2, 16);
 #endif
     feature_pool_free(l1);
 
+    yolo_timing_set_layer(3);
     // Layer 3: Conv 3x3 s2
     POOL_ALLOC(l3, sz_l3);
     t_layer = timer_read64();
@@ -255,11 +264,13 @@ int main(int argc, char* argv[]) {
         W("model.3.conv.bias"), l3, 80, 80);
     layer_cycles[3] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(3, layer_cycles[3], &l3[0]);
+    yolo_timing_print_layer_ops(3);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l3, 16);
 #endif
     feature_pool_free(l2);
 
+    yolo_timing_set_layer(4);
     // Layer 4: C3 (n=2)
     POOL_ALLOC(l4, sz_l4);
     const float* l4_cv1w[] = {W("model.4.m.0.cv1.conv.weight"), W("model.4.m.1.cv1.conv.weight")};
@@ -274,11 +285,13 @@ int main(int argc, char* argv[]) {
         2, l4_cv1w, l4_cv1b, l4_cv2w, l4_cv2b, 1, l4);  // shortcut=1
     layer_cycles[4] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(4, layer_cycles[4], &l4[0]);
+    yolo_timing_print_layer_ops(4);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l4, 16);
 #endif
     feature_pool_free(l3);
 
+    yolo_timing_set_layer(5);
     // Layer 5: Conv 3x3 s2
     POOL_ALLOC(l5, sz_l5);
     t_layer = timer_read64();
@@ -287,10 +300,12 @@ int main(int argc, char* argv[]) {
         W("model.5.conv.bias"), l5, 40, 40);
     layer_cycles[5] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(5, layer_cycles[5], &l5[0]);
+    yolo_timing_print_layer_ops(5);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l5, 16);
 #endif
 
+    yolo_timing_set_layer(6);
     // Layer 6: C3 (n=3)
     POOL_ALLOC(l6, sz_l6);
     const float* l6_cv1w[] = {W("model.6.m.0.cv1.conv.weight"), W("model.6.m.1.cv1.conv.weight"), W("model.6.m.2.cv1.conv.weight")};
@@ -305,11 +320,13 @@ int main(int argc, char* argv[]) {
         3, l6_cv1w, l6_cv1b, l6_cv2w, l6_cv2b, 1, l6);  // shortcut=1
     layer_cycles[6] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(6, layer_cycles[6], &l6[0]);
+    yolo_timing_print_layer_ops(6);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l6, 16);
 #endif
     feature_pool_free(l5);
 
+    yolo_timing_set_layer(7);
     // Layer 7: Conv 3x3 s2
     POOL_ALLOC(l7, sz_l7);
     t_layer = timer_read64();
@@ -318,10 +335,12 @@ int main(int argc, char* argv[]) {
         W("model.7.conv.bias"), l7, 20, 20);
     layer_cycles[7] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(7, layer_cycles[7], &l7[0]);
+    yolo_timing_print_layer_ops(7);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l7, 16);
 #endif
 
+    yolo_timing_set_layer(8);
     // Layer 8: C3 (n=1)
     POOL_ALLOC(l8, sz_l8);
     const float* l8_cv1w[] = {W("model.8.m.0.cv1.conv.weight")};
@@ -336,11 +355,13 @@ int main(int argc, char* argv[]) {
         1, l8_cv1w, l8_cv1b, l8_cv2w, l8_cv2b, 1, l8);  // shortcut=1
     layer_cycles[8] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(8, layer_cycles[8], &l8[0]);
+    yolo_timing_print_layer_ops(8);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l8, 16);
 #endif
     feature_pool_free(l7);
 
+    yolo_timing_set_layer(9);
     // Layer 9: SPPF
     POOL_ALLOC(l9, sz_l9);
     t_layer = timer_read64();
@@ -350,6 +371,7 @@ int main(int argc, char* argv[]) {
         5, l9);
     layer_cycles[9] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(9, layer_cycles[9], &l9[0]);
+    yolo_timing_print_layer_ops(9);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l9, 16);
 #endif
@@ -359,6 +381,7 @@ int main(int argc, char* argv[]) {
     // ===== Neck =====
     YOLO_LOG("\nNeck: ");
     t_stage_start = timer_read64();
+    yolo_timing_set_layer(10);
     // Layer 10: Conv 1x1
     POOL_ALLOC(l10, sz_l10);
     t_layer = timer_read64();
@@ -367,33 +390,41 @@ int main(int argc, char* argv[]) {
         W("model.10.conv.bias"), l10, 20, 20);
     layer_cycles[10] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(10, layer_cycles[10], &l10[0]);
+    yolo_timing_print_layer_ops(10);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l10, 16);
 #endif
     feature_pool_free(l9);
 
+    yolo_timing_set_layer(11);
     // Layer 11: Upsample
     POOL_ALLOC(l11, sz_l11);
     t_layer = timer_read64();
     upsample_nearest2x_nchw_f32(l10, n, 128, 20, 20, l11);
     layer_cycles[11] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(11, layer_cycles[11], &l11[0]);
+    yolo_timing_print_layer_ops(11);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l11, 16);
 #endif
 
+    yolo_timing_set_layer(12);
     // Layer 12: Concat (l11 + l6)
     POOL_ALLOC(l12, sz_l12);
     t_layer = timer_read64();
+    yolo_timing_begin("concat");
     concat_nchw_f32(l11, 128, l6, 128, n, 40, 40, l12);
+    yolo_timing_end();
     layer_cycles[12] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(12, layer_cycles[12], &l12[0]);
+    yolo_timing_print_layer_ops(12);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l12, 16);
 #endif
     feature_pool_free(l11);
     feature_pool_free(l6);
 
+    yolo_timing_set_layer(13);
     // Layer 13: C3 (n=1)
     POOL_ALLOC(l13, sz_l13);
     const float* l13_cv1w[] = {W("model.13.m.0.cv1.conv.weight")};
@@ -408,11 +439,13 @@ int main(int argc, char* argv[]) {
         1, l13_cv1w, l13_cv1b, l13_cv2w, l13_cv2b, 0, l13);  // shortcut=0 (head)
     layer_cycles[13] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(13, layer_cycles[13], &l13[0]);
+    yolo_timing_print_layer_ops(13);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l13, 16);
 #endif
     feature_pool_free(l12);
 
+    yolo_timing_set_layer(14);
     // Layer 14: Conv 1x1
     POOL_ALLOC(l14, sz_l14);
     t_layer = timer_read64();
@@ -421,33 +454,41 @@ int main(int argc, char* argv[]) {
         W("model.14.conv.bias"), l14, 40, 40);
     layer_cycles[14] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(14, layer_cycles[14], &l14[0]);
+    yolo_timing_print_layer_ops(14);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l14, 16);
 #endif
     feature_pool_free(l13);
 
+    yolo_timing_set_layer(15);
     // Layer 15: Upsample
     POOL_ALLOC(l15, sz_l15);
     t_layer = timer_read64();
     upsample_nearest2x_nchw_f32(l14, n, 64, 40, 40, l15);
     layer_cycles[15] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(15, layer_cycles[15], &l15[0]);
+    yolo_timing_print_layer_ops(15);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l15, 16);
 #endif
 
+    yolo_timing_set_layer(16);
     // Layer 16: Concat (l15 + l4)
     POOL_ALLOC(l16, sz_l16);
     t_layer = timer_read64();
+    yolo_timing_begin("concat");
     concat_nchw_f32(l15, 64, l4, 64, n, 80, 80, l16);
+    yolo_timing_end();
     layer_cycles[16] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(16, layer_cycles[16], &l16[0]);
+    yolo_timing_print_layer_ops(16);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l16, 16);
 #endif
     feature_pool_free(l15);
     feature_pool_free(l4);
 
+    yolo_timing_set_layer(17);
     // Layer 17: C3 (n=1) -> P3
     POOL_ALLOC(l17, sz_l17);
     const float* l17_cv1w[] = {W("model.17.m.0.cv1.conv.weight")};
@@ -462,11 +503,13 @@ int main(int argc, char* argv[]) {
         1, l17_cv1w, l17_cv1b, l17_cv2w, l17_cv2b, 0, l17);  // shortcut=0 (head)
     layer_cycles[17] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(17, layer_cycles[17], &l17[0]);
+    yolo_timing_print_layer_ops(17);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l17, 16);
 #endif
     feature_pool_free(l16);
 
+    yolo_timing_set_layer(18);
     // Layer 18: Conv 3x3 s2
     POOL_ALLOC(l18, sz_l18);
     t_layer = timer_read64();
@@ -475,22 +518,28 @@ int main(int argc, char* argv[]) {
         W("model.18.conv.bias"), l18, 40, 40);
     layer_cycles[18] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(18, layer_cycles[18], &l18[0]);
+    yolo_timing_print_layer_ops(18);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l18, 16);
 #endif
 
+    yolo_timing_set_layer(19);
     // Layer 19: Concat (l18 + l14)
     POOL_ALLOC(l19, sz_l19);
     t_layer = timer_read64();
+    yolo_timing_begin("concat");
     concat_nchw_f32(l18, 64, l14, 64, n, 40, 40, l19);
+    yolo_timing_end();
     layer_cycles[19] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(19, layer_cycles[19], &l19[0]);
+    yolo_timing_print_layer_ops(19);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l19, 16);
 #endif
     feature_pool_free(l18);
     feature_pool_free(l14);
 
+    yolo_timing_set_layer(20);
     // Layer 20: C3 (n=1) -> P4
     POOL_ALLOC(l20, sz_l20);
     const float* l20_cv1w[] = {W("model.20.m.0.cv1.conv.weight")};
@@ -505,11 +554,13 @@ int main(int argc, char* argv[]) {
         1, l20_cv1w, l20_cv1b, l20_cv2w, l20_cv2b, 0, l20);  // shortcut=0 (head)
     layer_cycles[20] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(20, layer_cycles[20], &l20[0]);
+    yolo_timing_print_layer_ops(20);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l20, 16);
 #endif
     feature_pool_free(l19);
 
+    yolo_timing_set_layer(21);
     // Layer 21: Conv 3x3 s2
     POOL_ALLOC(l21, sz_l21);
     t_layer = timer_read64();
@@ -518,22 +569,28 @@ int main(int argc, char* argv[]) {
         W("model.21.conv.bias"), l21, 20, 20);
     layer_cycles[21] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(21, layer_cycles[21], &l21[0]);
+    yolo_timing_print_layer_ops(21);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l21, 16);
 #endif
 
+    yolo_timing_set_layer(22);
     // Layer 22: Concat (l21 + l10)
     POOL_ALLOC(l22, sz_l22);
     t_layer = timer_read64();
+    yolo_timing_begin("concat");
     concat_nchw_f32(l21, 128, l10, 128, n, 20, 20, l22);
+    yolo_timing_end();
     layer_cycles[22] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(22, layer_cycles[22], &l22[0]);
+    yolo_timing_print_layer_ops(22);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l22, 16);
 #endif
     feature_pool_free(l21);
     feature_pool_free(l10);
 
+    yolo_timing_set_layer(23);
     // Layer 23: C3 (n=1) -> P5
     POOL_ALLOC(l23, sz_l23);
     const float* l23_cv1w[] = {W("model.23.m.0.cv1.conv.weight")};
@@ -548,6 +605,7 @@ int main(int argc, char* argv[]) {
         1, l23_cv1w, l23_cv1b, l23_cv2w, l23_cv2b, 0, l23);  // shortcut=0 (head)
     layer_cycles[23] = timer_delta64(t_layer, timer_read64());
     LAYER_LOG(23, layer_cycles[23], &l23[0]);
+    yolo_timing_print_layer_ops(23);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)l23, 16);
 #endif
@@ -556,6 +614,7 @@ int main(int argc, char* argv[]) {
 
     // ===== Detect Head =====
     YOLO_LOG("\nHead: ");
+    yolo_timing_set_layer(24);
     t_stage_start = timer_read64();
 #ifdef BARE_METAL
     (void)sz_p3;
@@ -585,6 +644,7 @@ int main(int argc, char* argv[]) {
 #else
     YOLO_LOG("  det %.2f ms\n", LAYER_MS(cycles_head));
 #endif
+    yolo_timing_print_layer_ops(24);
 #ifdef BARE_METAL
     Xil_DCacheFlushRange((uintptr_t)DETECT_HEAD_BASE, (unsigned int)DETECT_HEAD_SIZE);
     __sync_synchronize();
@@ -599,6 +659,7 @@ int main(int argc, char* argv[]) {
 #endif
 
     // ===== Decode =====
+    yolo_timing_set_layer(25);
     t_stage_start = timer_read64();
     detection_t* dets = malloc(MAX_DETECTIONS * sizeof(detection_t));
     int32_t num_dets = decode_nchw_f32(
@@ -613,6 +674,7 @@ int main(int argc, char* argv[]) {
 #else
     YOLO_LOG("  dec %.2f ms\n", LAYER_MS(cycles_decode));
 #endif
+    yolo_timing_print_layer_ops(25);
     if (p3) {
         int do_dbg = 0;
 #ifdef BARE_METAL
@@ -636,6 +698,7 @@ int main(int argc, char* argv[]) {
     }
 
     // NMS
+    yolo_timing_set_layer(26);
     t_stage_start = timer_read64();
     detection_t* nms_dets = NULL;
     int32_t num_nms = 0;
@@ -646,6 +709,7 @@ int main(int argc, char* argv[]) {
 #else
     YOLO_LOG("  nms %.2f ms\n", LAYER_MS(cycles_nms));
 #endif
+    yolo_timing_print_layer_ops(26);
     {
         uint64_t total = timer_delta64(t_total_start, timer_read64());
 #ifdef BARE_METAL

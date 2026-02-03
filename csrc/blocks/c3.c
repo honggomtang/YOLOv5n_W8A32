@@ -4,6 +4,7 @@
 #include "../operations/bottleneck.h"
 #include "../operations/concat.h"
 #include "../utils/feature_pool.h"
+#include "../utils/timing.h"
 #include <stdint.h>
 #ifdef BARE_METAL
 #include "xil_printf.h"
@@ -57,11 +58,13 @@ void c3_nchw_f32(
         return;
     }
     
-    // cv1
+    yolo_timing_begin("cv1");
     conv1x1(x, n, c_in, h, w, cv1_w, cv1_c_out, cv1_bias, cv1_out);
-    // cv2 (skip)
+    yolo_timing_end();
+    yolo_timing_begin("cv2");
     conv1x1(x, n, c_in, h, w, cv2_w, cv2_c_out, cv2_bias, cv2_out);
-    // Bottleneck
+    yolo_timing_end();
+    yolo_timing_begin("bottleneck");
     const float* bn_in = cv1_out;
     float* bn_out = bn_a;
     for (int32_t i = 0; i < n_bottleneck; i++) {
@@ -76,9 +79,13 @@ void c3_nchw_f32(
         
         bn_in = bn_out;
     }
-    // Concat + cv3
+    yolo_timing_end();
+    yolo_timing_begin("concat");
     concat_nchw_f32(bn_out, cv1_c_out, cv2_out, cv2_c_out, n, h, w, concat_out);
+    yolo_timing_end();
+    yolo_timing_begin("cv3");
     conv1x1(concat_out, n, cv1_c_out + cv2_c_out, h, w, cv3_w, cv3_c_out, cv3_bias, y);
+    yolo_timing_end();
 
     feature_pool_free(concat_out);
     feature_pool_free(bn_b);

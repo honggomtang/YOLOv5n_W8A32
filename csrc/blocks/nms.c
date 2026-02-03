@@ -1,4 +1,5 @@
 #include "nms.h"
+#include "../utils/timing.h"
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -47,12 +48,12 @@ int nms(
     if (!detections || num_detections <= 0 || !output_detections || !output_count) {
         return -1;
     }
-    
+    yolo_timing_begin("nms");
     *output_detections = NULL;
     *output_count = 0;
     // keep[i]==1 유지, -1 제거
     int* keep = (int*)calloc(num_detections, sizeof(int));
-    if (!keep) return -1;
+    if (!keep) { yolo_timing_end(); return -1; }
     
     int keep_count = 0;
     
@@ -79,6 +80,7 @@ int nms(
         *output_detections = (detection_t*)malloc(keep_count * sizeof(detection_t));
         if (!*output_detections) {
             free(keep);
+            yolo_timing_end();
             return -1;
         }
         
@@ -92,6 +94,6 @@ int nms(
     
     *output_count = keep_count;
     free(keep);
-    
+    yolo_timing_end();
     return 0;
 }
